@@ -1,0 +1,10 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Virtual environment
+venv/
+
+# Claude plan files
+.claude/plans/
