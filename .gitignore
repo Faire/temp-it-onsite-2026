@@ -8,15 +8,42 @@
 secrets.json
 credentials.json
 
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Virtual environment
+venv/
+
+# Claude plan files
+.claude/plans/
+.env
+__pycache__/
+*.pyc
+zoom_room_info.py
 # Python
 __pycache__/
 *.pyc
 *.pyo
 .venv/
 venv/
+.env
 
 # macOS
 .DS_Store
 
 # Logs
 *.log
+# Secrets / credentials
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.json
+credentials.json
+.env
+*.env
+.DS_Store
+__pycache__/
+*.pyc
