@@ -1,97 +1,67 @@
-#!/usr/bin/env python3
 import argparse
-import subprocess
+import os
 import sys
 
 import requests
+from dotenv import load_dotenv
 
-BASE_URL = "https://faire.teqtivity.com"
-ASSETS_ENDPOINT = f"{BASE_URL}/api/search-asset"
+load_dotenv()
 
-# TODO: update to match the exact 1Password item name storing the Teqtivity API credential
-OP_ITEM_NAME = "Teqtivity"
-# OP_VAULT = "IT"  # uncomment and set if you need to target a specific vault
-
-
-def get_api_key():
-    import os
-    if os.environ.get("TEQTIVITY_API_KEY"):
-        return os.environ["TEQTIVITY_API_KEY"]
-
-    cmd = ["op", "item", "get", OP_ITEM_NAME, "--fields", "credential"]
-    # cmd = ["op", "item", "get", OP_ITEM_NAME, "--vault", OP_VAULT, "--fields", "credential"]
-    try:
-        result = subprocess.check_output(cmd, stderr=subprocess.DEVNULL)
-        return result.decode().strip()
-    except FileNotFoundError:
-        print("Error: 1Password CLI ('op') not found. Install it from https://developer.1password.com/docs/cli/")
-        print("       Or set the TEQTIVITY_API_KEY environment variable to bypass 1Password.")
-        sys.exit(1)
-    except subprocess.CalledProcessError:
-        print(f"Error: Could not retrieve '{OP_ITEM_NAME}' from 1Password. Ensure you're signed in ('op signin') and the item name is correct.")
-        sys.exit(1)
+API_URL = os.getenv("TEQTIVITY_API_URL", "").rstrip("/")
+API_KEY = os.getenv("TEQTIVITY_API_KEY", "")
 
 
-def lookup_user_assets(email_or_username, api_key):
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Accept": "application/json",
-    }
-    params = {"search": email_or_username}
-
-    try:
-        response = requests.get(ASSETS_ENDPOINT, headers=headers, params=params, timeout=10)
-        if "--debug" in sys.argv:
-            print(f"[debug] GET {response.url}")
-            print(f"[debug] Status: {response.status_code}")
-            print(f"[debug] Response: {response.text[:1000]}")
-        response.raise_for_status()
-    except requests.exceptions.HTTPError:
-        print(f"Error: HTTP {response.status_code} — {response.text}")
-        sys.exit(1)
-    except requests.exceptions.ConnectionError:
-        print(f"Error: Could not connect to {BASE_URL}. Check the base URL and your network connection.")
-        sys.exit(1)
-    except requests.exceptions.Timeout:
-        print("Error: Request timed out.")
-        sys.exit(1)
-
-    return response.json()
+def build_session() -> requests.Session:
+    if not API_URL or not API_KEY:
+        sys.exit("Error: TEQTIVITY_API_URL and TEQTIVITY_API_KEY must be set in .env")
+    session = requests.Session()
+    session.headers.update({"Authorization": API_KEY, "Accept": "application/json"})
+    return session
 
 
-def display_assets(data, email_or_username):
-    assets = (data.get("data") or {}).get("items", [])
+def search_assets(session: requests.Session, query: str) -> list[dict]:
+    resp = session.get(f"{API_URL}/search-asset", params={"search": query})
+    if resp.status_code != 200:
+        sys.exit(f"Error fetching assets ({resp.status_code}): {resp.text}")
+    return resp.json().get("data", {}).get("items", [])
 
+
+def print_results(query: str, assets: list[dict]) -> None:
     if not assets:
-        print(f"No assets found for: {email_or_username}")
+        print(f"No assets found for '{query}'.")
         return
 
-    for i, asset in enumerate(assets, start=1):
-        if len(assets) > 1:
-            print(f"\n--- Asset {i} ---")
+    user_details = assets[0].get("user_details", {})
+    name = f"{user_details.get('first_name', '')} {user_details.get('last_name', '')}".strip()
+    email = user_details.get("email", "N/A")
 
-        specs = [s.strip() for s in asset.get("technical_specs", "").split("|")]
-        cpu = specs[0] if len(specs) > 0 else "N/A"
-        ram = specs[1] if len(specs) > 1 else "N/A"
+    print(f"\nUser: {name}  |  Email: {email}")
+    print("-" * 60)
+    print(f"{'Asset Tag':<12} {'Model':<40} {'Serial':<20} {'Status':<12} {'Assigned'}")
+    print("-" * 105)
 
-        print(f"  Model:           {asset.get('hardware_standard', 'N/A')}")
-        print(f"  Serial Number:   {asset.get('serial_no', 'N/A')}")
-        print(f"  CPU:             {cpu}")
-        print(f"  RAM:             {ram}")
-        print(f"  Deployment Date: {asset.get('date_deployed') or asset.get('first_assigned_date') or 'N/A'}")
+    for asset in assets:
+        tag = asset.get("asset_tag", "N/A")
+        model = asset.get("hardware_standard", "N/A")
+        serial = asset.get("serial_no", "N/A")
+        status = asset.get("asset_status", "N/A")
+        assigned = asset.get("first_assigned_date", "N/A")
+        print(f"{tag:<12} {model:<40} {serial:<20} {status:<12} {assigned}")
+
+    print(f"\nTotal devices: {len(assets)}")
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Look up Teqtivity asset info for a user by email or username."
-    )
-    parser.add_argument("email_or_username", help="User email or username to look up")
-    parser.add_argument("--debug", action="store_true", help="Print raw API request and response")
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Look up a user's devices in Teqtivity.")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--email", help="User's email address")
+    group.add_argument("--name", help="User's full name")
     args = parser.parse_args()
 
-    api_key = get_api_key()
-    data = lookup_user_assets(args.email_or_username, api_key)
-    display_assets(data, args.email_or_username)
+    session = build_session()
+    query = args.email or args.name
+    assets = search_assets(session, query)
+    print_results(query, assets)
 
 
 if __name__ == "__main__":
