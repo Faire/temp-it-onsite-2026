@@ -1,3 +1,13 @@
+# Secrets & credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.json
+credentials.json
+
 # Secrets
 .env
 .env.local
@@ -16,11 +26,15 @@ zoom_room_info.py
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+venv/
 .env
 
 # macOS
 .DS_Store
 
+# Logs
+*.log
 # Secrets / credentials
 *.key
 *.pem
