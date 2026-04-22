@@ -8,3 +8,28 @@ venv/
 
 # Claude plan files
 .claude/plans/
+.env
+__pycache__/
+*.pyc
+zoom_room_info.py
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# macOS
+.DS_Store
+
+# Secrets / credentials
+*.key
+*.pem
+*.p12
+*.pfx
+secrets.json
+credentials.json
+.env
+*.env
+.DS_Store
+__pycache__/
+*.pyc
